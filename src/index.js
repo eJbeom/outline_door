@@ -6,8 +6,7 @@ import {
   RenderPass,
   SMAAPass,
 } from "three/examples/jsm/Addons.js";
-import { CustomOutlinePass } from "./CustomOutlinePass.js";
-import { SurfaceFinder } from "./SurfaceFinder.js";
+import CustomOutlinePass from "./CustomOutlinePass.js";
 
 class App {
   constructor() {
@@ -25,7 +24,6 @@ class App {
     document.body.appendChild(this.renderer.domElement);
 
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
-    this.surfaceFinder = new SurfaceFinder();
 
     /* Init Composer */
     this.composer = new EffectComposer(this.renderer);
@@ -41,7 +39,7 @@ class App {
     this.composer.addPass(this.customOutlinePass);
     this.composer.addPass(this.SMAAPass);
 
-    /* init Model */
+    /* Init Model */
     this.loader = new GLTFLoader();
     this.modelPath = "door.glb";
     this.loader.load(this.modelPath, (gltf) => {
@@ -49,22 +47,15 @@ class App {
 
       this.scene.add(gltf.scene);
 
-      this.surfaceFinder.surfaceId = 0;
-
       gltf.scene.traverse((node) => {
-        if (node.isMesh) {
-          const colorsTypedArray =
-            this.surfaceFinder.getSurfaceIdAttribute(node);
-          node.geometry.setAttribute(
-            "color",
-            new THREE.BufferAttribute(colorsTypedArray, 4)
-          );
-        }
-      });
+        if (!node.isMesh) return;
+        const surfaceColorAttribute = new THREE.BufferAttribute(
+          this.customOutlinePass.computeSurfaceColors(node),
+          4
+        );
 
-      this.customOutlinePass.updateMaxSurfaceId(
-        this.surfaceFinder.surfaceId + 1
-      );
+        node.geometry.setAttribute("color", surfaceColorAttribute);
+      });
     });
 
     this.resize();

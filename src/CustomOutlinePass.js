@@ -1,10 +1,9 @@
 import * as THREE from "three";
 import { Pass } from "three/examples/jsm/postprocessing/Pass.js";
 import { FullScreenQuad } from "three/examples/jsm/postprocessing/Pass.js";
-import { getSurfaceIdMaterial } from "./SurfaceFinder.js";
-import { max } from "three/tsl";
+import SurfaceFinder from "./SurfaceFinder.js";
 
-export class CustomOutlinePass extends Pass {
+export default class CustomOutlinePass extends Pass {
   constructor(resolution, scene, camera) {
     super();
 
@@ -13,14 +12,14 @@ export class CustomOutlinePass extends Pass {
     this.resolution = new THREE.Vector2(resolution.x, resolution.y);
 
     this.fsQuad = new FullScreenQuad(null);
-    this.fsQuad.material = this.getMaterial();
+    this.fsQuad.material = this.#getMaterial();
 
     this.surfaceBuffer = new THREE.WebGLRenderTarget(
       this.resolution.x,
       this.resolution.y
     );
 
-    this.surfaceIdOverrideMaterial = getSurfaceIdMaterial();
+    this.surfaceId = new SurfaceFinder();
   }
 
   setSize(width, height) {
@@ -40,7 +39,7 @@ export class CustomOutlinePass extends Pass {
     renderer.setRenderTarget(this.surfaceBuffer);
 
     // Render the "surface ID buffer"
-    this.scene.overrideMaterial = this.surfaceIdOverrideMaterial;
+    this.scene.overrideMaterial = this.surfaceId.material;
 
     renderer.render(this.scene, this.camera);
 
@@ -63,23 +62,16 @@ export class CustomOutlinePass extends Pass {
     this.fsQuad.dispose();
   }
 
-  updateMaxSurfaceId(maxSurfaceId) {
-    this.surfaceIdOverrideMaterial.uniforms.maxSurfaceId.value = maxSurfaceId;
+  computeSurfaceColors(node) {
+    return this.surfaceId.computeColors(node);
   }
 
-  getMaterial() {
+  #getMaterial() {
     return new THREE.ShaderMaterial({
       uniforms: {
         sceneColorBuffer: {},
-        depthBuffer: {},
         surfaceBuffer: {},
         outlineColor: { value: new THREE.Color(0xffffff) },
-        //4 scalar values packed in one uniform: depth multiplier, depth bias, and same for normals.
-        multiplierParameters: {
-          value: new THREE.Vector4(0.9, 20, 1, 1),
-        },
-        cameraNear: { value: this.camera.near },
-        cameraFar: { value: this.camera.far },
         screenSize: {
           value: new THREE.Vector4(
             this.resolution.x,
@@ -88,15 +80,15 @@ export class CustomOutlinePass extends Pass {
             1 / this.resolution.y
           ),
         },
-        time: { value: 0.0 },
       },
-      vertexShader: this.vertexShader,
-      fragmentShader: this.fragmentShader,
+      vertexShader: vertexShader(),
+      fragmentShader: fragmentShader(),
     });
   }
+}
 
-  get vertexShader() {
-    return `
+const vertexShader = () => {
+  return `
 			varying vec2 vUv;
       
 			void main() {
@@ -104,10 +96,10 @@ export class CustomOutlinePass extends Pass {
 				gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
 			}
 			`;
-  }
+};
 
-  get fragmentShader() {
-    return `
+const fragmentShader = () => {
+  return `
       uniform sampler2D sceneColorBuffer;
 			uniform sampler2D surfaceBuffer;
 			uniform vec4 screenSize;
@@ -159,5 +151,4 @@ export class CustomOutlinePass extends Pass {
         }
 			}
 			`;
-  }
-}
+};
